@@ -1,0 +1,10 @@
+[
+   {
+      "source":"system-type=temperature-provider",
+      "target":"system-type=temperature-consumer",
+      "service":"get-temperature",
+      "interfaces":[
+         "HTTP-SECURE-JSON"
+      ]
+   }
+]
