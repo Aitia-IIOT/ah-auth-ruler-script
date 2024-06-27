@@ -6,5 +6,13 @@
       "interfaces":[
          "HTTP-SECURE-JSON"
       ]
+   },
+   {
+      "consumer":"my-consumer",
+      "provider":"system-type=temperature-provider",
+      "service":"get-temperature",
+      "interfaces":[
+         "HTTP-SECURE-JSON"
+      ]
    }
 ]
