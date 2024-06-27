@@ -19,8 +19,8 @@ Updates the authorization rules within a local cloud based on systems' metadata 
 ```
 [
    {
-      "consumer":"<sys-metadata-key>=<sys-metadata-value>",
-      "provider":"<sys-metadata-key>=<sys-metadata-value>",
+      "consumer":"<sys-metadata-key>=<sys-metadata-value>" || "systemName",
+      "provider":"<sys-metadata-key>=<sys-metadata-value>" || "systemName",
       "service":"<servicedefinition>",
       "interfaces":[
          "<interface-name>"
