@@ -15,10 +15,8 @@ public class ConsumerApplicationInitListener extends ApplicationInitListener {
 	//-------------------------------------------------------------------------------------------------
 	@Override
 	protected void customInit(final ContextRefreshedEvent event) {
-		
 		//Checking the availability of necessary core systems
 		checkCoreSystemReachability(CoreSystem.SERVICEREGISTRY);
 		checkCoreSystemReachability(CoreSystem.AUTHORIZATION);
-		
 	}
 }

@@ -1,8 +1,15 @@
 [
    {
-      "source":"system-type=temperature-provider",
-      "target":"system-type=temperature-consumer",
-      "service":"get-temperature",
+      "consumer":"testconsumer1",
+      "provider":"systemtype=test",
+      "service":"test-service",
+      "interfaces":[
+      ]
+   },
+   {
+      "consumer":"testconsumer2",
+      "provider":"testprovider",
+      "service":"test-service",
       "interfaces":[
          "HTTP-SECURE-JSON"
       ]
