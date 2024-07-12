@@ -1,6 +1,6 @@
 package eu.arrowhead.application.skeleton.consumer;
 
-public class ConsumerConstants {
+public final class ConsumerConstants {
 
 	//=================================================================================================
 	// members

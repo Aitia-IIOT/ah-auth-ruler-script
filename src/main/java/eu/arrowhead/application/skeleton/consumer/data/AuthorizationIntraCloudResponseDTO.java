@@ -14,8 +14,6 @@ public class AuthorizationIntraCloudResponseDTO {
 	//=================================================================================================
 	// members
 
-	private static final long serialVersionUID = 8834973165624838555L;
-
 	private long id;
 	private SystemResponseDTO consumerSystem;
 	private SystemResponseDTO providerSystem;

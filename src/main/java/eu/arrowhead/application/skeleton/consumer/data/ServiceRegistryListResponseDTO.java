@@ -14,8 +14,6 @@ public class ServiceRegistryListResponseDTO {
 	//=================================================================================================
 	// members
 
-	private static final long serialVersionUID = 3892383727230105100L;
-
 	private List<ServiceRegistryResponseDTO> data;
 	private long count;
 

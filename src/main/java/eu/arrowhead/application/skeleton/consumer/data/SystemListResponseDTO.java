@@ -15,8 +15,6 @@ public class SystemListResponseDTO {
 	//=================================================================================================
 	// members
 
-	private static final long serialVersionUID = -1661484009332215820L;
-
 	private List<SystemResponseDTO> data = new ArrayList<>();
 	private long count;
 
