@@ -104,13 +104,16 @@ public class ConsumerMain implements ApplicationRunner {
 		List<AuthRule> rules = new ArrayList<>();
 
 		for (JsonNode rule : newRulesJson) {
-
-			AuthRule newRule = Utilities.fromJson(rule.toString(), AuthRule.class);
-			// Setting the defaults if no interfaces are given
-			if (newRule.getInterfaces().size() == 0) {
-				newRule.setInterfaces(new ArrayList<String>(defaultInterfaceNames));
+			try {
+				AuthRule newRule = Utilities.fromJson(rule.toString(), AuthRule.class);
+				// Setting the defaults if no interfaces are given
+				if (newRule.getInterfaces().size() == 0) {
+					newRule.setInterfaces(new ArrayList<String>(defaultInterfaceNames));
+				}
+				rules.add(newRule);
+			} catch (Exception e) {
+				logger.error("Could not create authorization rule (invalid json format): " + e.getMessage());
 			}
-			rules.add(newRule);
 		}
 		return rules;
 	}
