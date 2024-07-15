@@ -3,6 +3,7 @@ package eu.arrowhead.application.skeleton.consumer;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,9 +51,6 @@ public class ConsumerMain implements ApplicationRunner {
 	@Autowired
 	private SSLProperties sslProperties;
 
-	@Value("#{${default_interface_name_list}}")
-	private List<String> defaultInterfaceNames;
-
 	private final Logger logger = LogManager.getLogger(ConsumerMain.class);
 
 	private List<SystemResponseDTO> systems;
@@ -61,26 +59,33 @@ public class ConsumerMain implements ApplicationRunner {
 
 	private List<ServiceInterfaceResponseDTO> interfaces;
 
+	@Value(CommonConstants.$SERVICEREGISTRY_ADDRESS_WD)
+	private String serviceRegistryAddress;
+
+	@Value(CommonConstants.$SERVICEREGISTRY_PORT_WD)
+	private int serviceRegistryPort;
+
 	// =================================================================================================
 	// methods
 
 	// ------------------------------------------------------------------------------------------------
 	public static void main(final String[] args) {
-		if (args.length != 1) {
-			System.out.println("You must specify exactly one path! (E.g.: ../example.json)");
-		} else {
-			SpringApplication.run(ConsumerMain.class, args);
-		}
+		SpringApplication.run(ConsumerMain.class, args);
 	}
 
 	// -------------------------------------------------------------------------------------------------
 	@Override
 	public void run(final ApplicationArguments args) throws Exception {
 
-		List<AuthRule> newRules = getRules(args.getSourceArgs()[0]);
+		if (args.getSourceArgs().length != 1) {
+			logger.error("You must specify exactly one path! (E.g.: ../example.json)");
+			return;
+		}
+
+		final List<AuthRule> newRules = getRules(args.getSourceArgs()[0]);
 
 		if (newRules == null) {
-			System.out.println("Reading the file was unsuccessful!");
+			logger.error("Reading the file was unsuccessful!");
 			return;
 		}
 
@@ -91,27 +96,30 @@ public class ConsumerMain implements ApplicationRunner {
 		updateAuthRules(newRules);
 	}
 
+	// =================================================================================================
+	// assistant methods
+
 	// -------------------------------------------------------------------------------------------------
 	private List<AuthRule> getRules(final String filename) {
 
 		JsonNode newRulesJson;
 		try {
 			newRulesJson = new ObjectMapper().readTree(new File(filename));
-		} catch (IOException e) {
+		} catch (final IOException e) {
 			logger.error(e.getMessage());
 			return null;
 		}
-		List<AuthRule> rules = new ArrayList<>();
+		final List<AuthRule> rules = new ArrayList<>();
 
-		for (JsonNode rule : newRulesJson) {
+		for (final JsonNode rule : newRulesJson) {
 			try {
-				AuthRule newRule = Utilities.fromJson(rule.toString(), AuthRule.class);
+				final AuthRule newRule = Utilities.fromJson(rule.toString(), AuthRule.class);
 				// Setting the defaults if no interfaces are given
 				if (newRule.getInterfaces().size() == 0) {
-					newRule.setInterfaces(new ArrayList<String>(defaultInterfaceNames));
+					newRule.setInterfaces(new ArrayList<String>(ConsumerConstants.DEFAULT_INTERFACE_NAMES));
 				}
 				rules.add(newRule);
-			} catch (Exception e) {
+			} catch (final Exception e) {
 				logger.error("Could not create authorization rule (invalid json format): " + e.getMessage());
 			}
 		}
@@ -126,73 +134,76 @@ public class ConsumerMain implements ApplicationRunner {
 
 	// -------------------------------------------------------------------------------------------------
 	private void deleteRules(final List<AuthRule> rules) {
-		List<Integer> ruleIdsToDelete = new ArrayList<Integer>();
+		List<Long> ruleIdsToDelete = new ArrayList<Long>();
 		try {
 			ruleIdsToDelete = getRuleIdsToDelete(getAuthorizationRules(), getSystemIdsToDelete(rules));
-		} catch (Exception e) {
+		} catch (final Exception e) {
 			logger.error(e.getMessage());
 		}
 
 		Map<String, String> authorizationUri = null;
 		try {
 			authorizationUri = getAuthorizationUri();
-		} catch (Exception e) {
+		} catch (final Exception e) {
 			logger.error(e.getMessage());
 		}
 
-		for (int id : ruleIdsToDelete) {
-			logger.info("Removing authorization rule with id: " + id);
-			String response = arrowheadService.consumeServiceHTTP(String.class, HttpMethod.DELETE,
-					Utilities.createURI(authorizationUri.get("scheme"), authorizationUri.get("host"),
-							Integer.parseInt(authorizationUri.get("port")), authorizationUri.get("path")
-									+ ConsumerConstants.QUERY_AUTH_INTRA_CLOUD + "/" + Integer.toString(id)),
+		for (final Long id : ruleIdsToDelete) {
+			logger.debug("Removing authorization rule with id: " + id);
+			final String response = arrowheadService.consumeServiceHTTP(String.class, HttpMethod.DELETE,
+					Utilities.createURI(authorizationUri.get(ConsumerConstants.SCHEME), authorizationUri.get(ConsumerConstants.HOST),
+							Integer.parseInt(authorizationUri.get(ConsumerConstants.PORT)), authorizationUri.get(ConsumerConstants.PATH)
+									+ ConsumerConstants.QUERY_AUTH_INTRA_CLOUD + "/" + Long.toString(id)),
 					null, null);
-			logger.info("Http DELETE response: " + response);
+			logger.debug("Http DELETE response: " + response);
 		}
 	}
 
 	// -------------------------------------------------------------------------------------------------
 	private void addRules(final List<AuthRule> rules) {
 
-		List<AuthorizationIntraCloudRequestDTO> rulesToAdd = createDTOListFromAuthRules(rules);
-		for (AuthorizationIntraCloudRequestDTO ruleToAdd : rulesToAdd) {
+		final List<AuthorizationIntraCloudRequestDTO> rulesToAdd = createDTOListFromAuthRules(rules);
+		for (final AuthorizationIntraCloudRequestDTO ruleToAdd : rulesToAdd) {
 			addSingleRule(ruleToAdd);
 		}
 	}
 
-	// =================================================================================================
-	// assistant methods
-
 	// -------------------------------------------------------------------------------------------------
 	private List<AuthorizationIntraCloudRequestDTO> createDTOListFromAuthRules(final List<AuthRule> rules) {
 
-		List<AuthorizationIntraCloudRequestDTO> dtoList = new ArrayList<>();
-		Long consumerId = null;
-		List<Long> providerId;
-		List<Long> serviceDefinitionId;
+		final List<AuthorizationIntraCloudRequestDTO> dtoList = new ArrayList<>();
+
+		List<Long> consumerIdList; //multiple consumerid can match one auth rule's systeminfo
+		List<Long> prodiverIdList; //multiple providerid can match one auth rule's systeminfo
+
+		List<Long> serviceDefinitionId; //contains one element, but must be a list because of the DTO
 		List<Long> interfaceIds;
 
 		for (int i = 0; i < rules.size(); i++) {
 
-			providerId = new ArrayList<>();
-			serviceDefinitionId = new ArrayList<>();
+			consumerIdList = new ArrayList<>();
+			prodiverIdList = new ArrayList<>();
+			serviceDefinitionId = new ArrayList<>(1);
 			interfaceIds = new ArrayList<>();
 
 			try {
-				consumerId = getSystemIdByInfo(rules.get(i).getConsumer());
-
-				providerId.add(getSystemIdByInfo(rules.get(i).getProvider()));
+				consumerIdList = getSystemIdsByInfo(rules.get(i).getConsumer());
+				prodiverIdList = getSystemIdsByInfo(rules.get(i).getProvider());
 
 				serviceDefinitionId.add(serviceDefinitionToId(rules.get(i).getService()));
 
-				for (String interfaceName : rules.get(i).getInterfaces()) {
+				for (final String interfaceName : rules.get(i).getInterfaces()) {
 					interfaceIds.add(interfaceNameToId(interfaceName));
 
 				}
 
-				dtoList.add(new AuthorizationIntraCloudRequestDTO(consumerId, providerId, serviceDefinitionId,
-						interfaceIds));
-			} catch (Exception e) {
+				for (final Long consumerId : consumerIdList) {
+					for (final Long providerId : prodiverIdList) {
+						dtoList.add(new AuthorizationIntraCloudRequestDTO(consumerId, Arrays.asList(providerId), serviceDefinitionId,
+								interfaceIds));
+					}
+				}
+			} catch (final Exception e) {
 				logger.error("Could not create authorization rule: " + rules.get(i).toString() + ", reason: "
 						+ e.getMessage());
 			}
@@ -206,36 +217,39 @@ public class ConsumerMain implements ApplicationRunner {
 		Map<String, String> authorizationUri = null;
 		try {
 			authorizationUri = getAuthorizationUri();
-		} catch (Exception e) {
+		} catch (final Exception e) {
 			logger.error(e.getMessage());
 		}
 
-		logger.info("Sending the POST request for the following authorization rule: " + ruleToAdd.toString());
-		AuthorizationIntraCloudListResponseDTO response = arrowheadService.consumeServiceHTTP(
+		logger.debug("Sending the POST request for the following authorization rule: " + ruleToAdd.toString());
+		final AuthorizationIntraCloudListResponseDTO response = arrowheadService.consumeServiceHTTP(
 				AuthorizationIntraCloudListResponseDTO.class, HttpMethod.POST,
-				Utilities.createURI(authorizationUri.get("scheme"), authorizationUri.get("host"),
-						Integer.parseInt(authorizationUri.get("port")),
-						authorizationUri.get("path") + ConsumerConstants.QUERY_AUTH_INTRA_CLOUD),
+				Utilities.createURI(authorizationUri.get(ConsumerConstants.SCHEME), authorizationUri.get(ConsumerConstants.HOST),
+						Integer.parseInt(authorizationUri.get(ConsumerConstants.PORT)),
+						authorizationUri.get(ConsumerConstants.PATH) + ConsumerConstants.QUERY_AUTH_INTRA_CLOUD),
 				null, ruleToAdd);
 		if (response == null) {
 			logger.error("Could not apply the following authorization rule: " + ruleToAdd.toString());
 		} else {
-			logger.info("Successfully applied rule with id: " + response.getData().getFirst().getId());
+			logger.debug("Successfully applied rule with id: " + response.getData().getFirst().getId());
 		}
 	}
 
 	// -------------------------------------------------------------------------------------------------
-	private List<Integer> getSystemIdsToDelete(final List<AuthRule> rules) {
+	private List<Long> getSystemIdsToDelete(final List<AuthRule> rules) {
 
-		List<Integer> result = new ArrayList<>();
+		final List<Long> result = new ArrayList<>();
 
-		for (AuthRule rule : rules) {
+		for (final AuthRule rule : rules) {
 			try {
-				int id = (int) getSystemIdByInfo(rule.getConsumer());
-				if (!result.contains(id)) {
-					result.add(id);
+				final List<Long> ids = getSystemIdsByInfo(rule.getConsumer());
+				for (final Long id : ids) {
+					if (!result.contains(id)) {
+						result.add(id);
+					}
 				}
-			} catch (Exception e) {
+
+			} catch (final Exception e) {
 				logger.error(e);
 			}
 
@@ -247,57 +261,81 @@ public class ConsumerMain implements ApplicationRunner {
 	// -------------------------------------------------------------------------------------------------
 	// the system string can be systemname or metadata
 	// (in case it is metadata, it must contain '=')
-	private long getSystemIdByInfo(final String systemInfo) throws Exception {
-		Assert.notNull(this.systems, "The ist of possible systems is empty!");
-		for (SystemResponseDTO system : systems) {
-			if (systemInfo.contains("=")) {
-				String[] metaData = systemInfo.split("=");
+	private List<Long> getSystemIdsByInfo(final String systemInfo) throws Exception {
 
-				if (metaData.length != 2) {
-					throw new IllegalArgumentException("System metadata is in invalid format!");
-				}
-				String key = metaData[0];
-				String vaule = metaData[1];
+		Assert.notNull(this.systems, "The list of possible systems is empty!");
+
+		final String systemInfoFormatted = systemInfo.trim();
+
+		final List<Long> result = new ArrayList<>();
+
+		//case: systeminfo is metadata
+		if (systemInfoFormatted.contains("=")) {
+			final String[] metadata = systemInfoFormatted.split(ConsumerConstants.METADATA_SCHEME_STRING);
+
+			if (metadata.length != 2) {
+				throw new IllegalArgumentException("System metadata is in invalid format!");
+			}
+			final String key = metadata[0].trim();
+			final String value = metadata[1].trim();
+			for (final SystemResponseDTO system : systems) {
 				if (system.getMetadata() != null && system.getMetadata().containsKey(key)
-						&& system.getMetadata().get(key).equals(vaule)) {
-					return system.getId();
+						&& system.getMetadata().get(key).equals(value)) {
+					result.add(system.getId());
 				}
-			} else if (system.getSystemName().equals(systemInfo)) {
-				return system.getId();
+			}
+			//case: sisteminfo is systemname
+		} else {
+			for (final SystemResponseDTO system : systems) {
+				if (system.getSystemName().equals(systemInfoFormatted)) {
+					result.add(system.getId());
+				}
 			}
 		}
-		throw new Exception("Could not find id for system with info: " + systemInfo);
+
+		if (result.size() == 0) {
+			throw new Exception("Could not find id for system with info: " + systemInfoFormatted);
+		}
+		return result;
 	}
 
 	// -------------------------------------------------------------------------------------------------
 	private long interfaceNameToId(final String interfaceName) throws Exception {
+
 		Assert.notNull(this.interfaces, "The list of possible interfaces is empty!");
-		for (ServiceInterfaceResponseDTO interfaceElement : this.interfaces) {
-			if (interfaceElement.getInterfaceName().equals(interfaceName)) {
+
+		final String interfaceNameFormatted = interfaceName.trim();
+
+		for (final ServiceInterfaceResponseDTO interfaceElement : this.interfaces) {
+			if (interfaceElement.getInterfaceName().equals(interfaceNameFormatted)) {
 				return interfaceElement.getId();
 			}
 		}
-		throw new Exception("Could not find id for interface with name: " + interfaceName);
+		throw new Exception("Could not find id for interface with name: " + interfaceNameFormatted);
 	}
 
 	// -------------------------------------------------------------------------------------------------
 	private long serviceDefinitionToId(final String serviceDefinition) throws Exception {
-		Assert.notNull(this.services, "The ist of possible services is empty!");
-		for (ServiceDefinitionResponseDTO service : this.services) {
-			if (service.getServiceDefinition().equals(serviceDefinition)) {
+
+		Assert.notNull(this.services, "The list of possible services is empty!");
+
+		final String serviceDefinitionFormatted = serviceDefinition.trim();
+
+		for (final ServiceDefinitionResponseDTO service : this.services) {
+			if (service.getServiceDefinition().equals(serviceDefinitionFormatted)) {
 				return service.getId();
 			}
 		}
-		throw new Exception("Could not find id for service definition with name: " + serviceDefinition);
+		throw new Exception("Could not find id for service definition with name: " + serviceDefinitionFormatted);
 	}
 
 	// -------------------------------------------------------------------------------------------------
-	private List<Integer> getRuleIdsToDelete(final List<AuthorizationIntraCloudResponseDTO> rules, final List<Integer> systemIds) {
-		List<Integer> result = new ArrayList<>();
-		for (AuthorizationIntraCloudResponseDTO rule : rules) {
-			for (int id : systemIds) {
+	private List<Long> getRuleIdsToDelete(final List<AuthorizationIntraCloudResponseDTO> rules, final List<Long> systemIds) {
+		final List<Long> result = new ArrayList<>();
+		for (final AuthorizationIntraCloudResponseDTO rule : rules) {
+			for (final Long id : systemIds) {
 				if (rule.getConsumerSystem().getId() == id) {
-					result.add((int) rule.getId());
+					result.add((rule.getId()));
 				}
 			}
 		}
@@ -306,12 +344,12 @@ public class ConsumerMain implements ApplicationRunner {
 
 	// -------------------------------------------------------------------------------------------------
 	private List<SystemResponseDTO> getSystems() {
-		logger.info("Get systems request started...");
-		SystemListResponseDTO response = arrowheadService.consumeServiceHTTP(SystemListResponseDTO.class,
+		logger.debug("Get systems request started...");
+		final SystemListResponseDTO response = arrowheadService.consumeServiceHTTP(SystemListResponseDTO.class,
 				HttpMethod.GET,
 				Utilities.createURI(getScheme(),
-						CommonConstants.$SERVICEREGISTRY_ADDRESS_WD.split(":")[1].replace("}", ""),
-						Integer.parseInt(CommonConstants.$SERVICEREGISTRY_PORT_WD.split(":")[1].replace("}", "")),
+						serviceRegistryAddress,
+						serviceRegistryPort,
 						CommonConstants.SERVICEREGISTRY_URI + ConsumerConstants.QUERY_GET_SYSTEMS),
 				null, null);
 		return response.getData();
@@ -319,12 +357,12 @@ public class ConsumerMain implements ApplicationRunner {
 
 	// -------------------------------------------------------------------------------------------------
 	private List<ServiceDefinitionResponseDTO> getServices() {
-		logger.info("Get services request started...");
-		ServiceDefinitionsListResponseDTO response = arrowheadService.consumeServiceHTTP(
+		logger.debug("Get services request started...");
+		final ServiceDefinitionsListResponseDTO response = arrowheadService.consumeServiceHTTP(
 				ServiceDefinitionsListResponseDTO.class, HttpMethod.GET,
 				Utilities.createURI(getScheme(),
-						CommonConstants.$SERVICEREGISTRY_ADDRESS_WD.split(":")[1].replace("}", ""),
-						Integer.parseInt(CommonConstants.$SERVICEREGISTRY_PORT_WD.split(":")[1].replace("}", "")),
+						serviceRegistryAddress,
+						serviceRegistryPort,
 						CommonConstants.SERVICEREGISTRY_URI + ConsumerConstants.QUERY_GET_SERVICES),
 				null, null);
 		return response.getData();
@@ -332,12 +370,12 @@ public class ConsumerMain implements ApplicationRunner {
 
 	// -------------------------------------------------------------------------------------------------
 	private List<ServiceInterfaceResponseDTO> getInterfaces() {
-		logger.info("Get interfaces request started...");
-		ServiceInterfacesListResponseDTO response = arrowheadService.consumeServiceHTTP(
+		logger.debug("Get interfaces request started...");
+		final ServiceInterfacesListResponseDTO response = arrowheadService.consumeServiceHTTP(
 				ServiceInterfacesListResponseDTO.class, HttpMethod.GET,
 				Utilities.createURI(getScheme(),
-						CommonConstants.$SERVICEREGISTRY_ADDRESS_WD.split(":")[1].replace("}", ""),
-						Integer.parseInt(CommonConstants.$SERVICEREGISTRY_PORT_WD.split(":")[1].replace("}", "")),
+						serviceRegistryAddress,
+						serviceRegistryPort,
 						CommonConstants.SERVICEREGISTRY_URI + ConsumerConstants.QUERY_GET_INTERFACES),
 				null, null);
 		return response.getData();
@@ -349,21 +387,21 @@ public class ConsumerMain implements ApplicationRunner {
 		List<AuthorizationIntraCloudResponseDTO> rules = null;
 		try {
 			authorizationUri = getAuthorizationUri();
-		} catch (Exception e) {
+		} catch (final Exception e) {
 			logger.error(e.getMessage());
 		}
-		logger.info("Get authorization rules request started...");
-		AuthorizationIntraCloudListResponseDTO response = arrowheadService.consumeServiceHTTP(
+		logger.debug("Get authorization rules request started...");
+		final AuthorizationIntraCloudListResponseDTO response = arrowheadService.consumeServiceHTTP(
 				AuthorizationIntraCloudListResponseDTO.class, HttpMethod.GET,
-				Utilities.createURI(authorizationUri.get("scheme"), authorizationUri.get("host"),
-						Integer.parseInt(authorizationUri.get("port")),
-						authorizationUri.get("path") + ConsumerConstants.QUERY_AUTH_INTRA_CLOUD),
+				Utilities.createURI(authorizationUri.get(ConsumerConstants.SCHEME), authorizationUri.get(ConsumerConstants.HOST),
+						Integer.parseInt(authorizationUri.get(ConsumerConstants.PORT)),
+						authorizationUri.get(ConsumerConstants.PATH) + ConsumerConstants.QUERY_AUTH_INTRA_CLOUD),
 				null, null);
 
 		if (response == null) {
 			logger.error("Getting the authorization rules was unsuccessful!");
 		} else if (response.getData().isEmpty()) {
-			logger.error("No authorization rule found!");
+			logger.debug("No current authorization were found.");
 		} else {
 			rules = response.getData();
 		}
@@ -380,14 +418,14 @@ public class ConsumerMain implements ApplicationRunner {
 
 	// -------------------------------------------------------------------------------------------------
 	private Map<String, String> getAuthorizationUri() throws Exception {
-		Map<String, String> result = new HashMap<>();
-		result.put("scheme", getScheme());
+		final Map<String, String> result = new HashMap<>();
+		result.put(ConsumerConstants.SCHEME, getScheme());
 
-		for (SystemResponseDTO system : systems) {
+		for (final SystemResponseDTO system : systems) {
 			if (system.getSystemName().equals(ConsumerConstants.AUTHORIZATION)) {
-				result.put("host", system.getAddress());
-				result.put("port", Integer.toString(system.getPort()));
-				result.put("path", CommonConstants.AUTHORIZATION_URI);
+				result.put(ConsumerConstants.HOST, system.getAddress());
+				result.put(ConsumerConstants.PORT, Integer.toString(system.getPort()));
+				result.put(ConsumerConstants.PATH, CommonConstants.AUTHORIZATION_URI);
 
 				return result;
 			}

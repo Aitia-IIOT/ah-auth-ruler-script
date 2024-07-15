@@ -1,6 +1,6 @@
 # Arrowhead Authorization Ruler
 
-Updates the authorization rules within a local cloud based on systems' metadata and service definitions using the SysOp certificate of a local cloud.
+Updates the authorization rules within a local cloud based on systems' name or metadata and service definitions using the SysOp certificate of a local cloud.
 
 ## Requiriments
 
@@ -19,8 +19,8 @@ Updates the authorization rules within a local cloud based on systems' metadata 
 ```
 [
    {
-      "source":"<sys-metadata-key>=<sys-metadata-value>",
-      "target":"<sys-metadata-key>=<sys-metadata-value>",
+      "consumer":"<sys-metadata-key>=<sys-metadata-value>" || "<systemName>",
+      "provider":"<sys-metadata-key>=<sys-metadata-value>" || "<systemName>",
       "service":"<servicedefinition>",
       "interfaces":[
          "<interface-name>"
