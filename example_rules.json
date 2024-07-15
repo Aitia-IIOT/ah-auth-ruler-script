@@ -7,11 +7,19 @@
       ]
    },
    {
-      "consumer":"testconsumer2",
-      "provider":"testprovider",
-      "service":"test-service",
+      "consumer":"system-type=temperature-consumer",
+      "provider":"system-type=temperature-provider",
+      "service":"get-temperature",
       "interfaces":[
          "HTTP-SECURE-JSON"
+      ]
+   },
+   {
+      "consumer":"my-consumer",
+      "provider":"system-type=temperature-provider",
+      "service":"get-temperature",
+      "interfaces":[
+         "HTTP-INSECURE-JSON"
       ]
    }
 ]
