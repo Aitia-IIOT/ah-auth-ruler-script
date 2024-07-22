@@ -18,6 +18,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.Assert;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -37,6 +38,7 @@ import eu.arrowhead.common.Utilities;
 import eu.arrowhead.common.dto.shared.ServiceDefinitionResponseDTO;
 import eu.arrowhead.common.dto.shared.ServiceInterfaceResponseDTO;
 import eu.arrowhead.common.dto.shared.SystemResponseDTO;
+import eu.arrowhead.common.exception.ArrowheadException;
 
 @SpringBootApplication
 @ComponentScan(basePackages = { CommonConstants.BASE_PACKAGE, "ai.aitia" })
@@ -58,6 +60,8 @@ public class ConsumerMain implements ApplicationRunner {
 	private List<ServiceDefinitionResponseDTO> services;
 
 	private List<ServiceInterfaceResponseDTO> interfaces;
+
+	private Map<String, String> authorizationUri;
 
 	@Value(CommonConstants.$SERVICEREGISTRY_ADDRESS_WD)
 	private String serviceRegistryAddress;
@@ -89,9 +93,15 @@ public class ConsumerMain implements ApplicationRunner {
 			return;
 		}
 
-		systems = getSystems();
-		services = getServices();
-		interfaces = getInterfaces();
+		try {
+			systems = getSystems();
+			services = getServices();
+			interfaces = getInterfaces();
+			authorizationUri = getAuthorizationUri();
+		} catch (Exception e) {
+			logger.error("Updating the authorization rules was unsuccessful, reason: " + e.getMessage());
+			return;
+		}
 
 		updateAuthRules(newRules);
 	}
@@ -109,7 +119,7 @@ public class ConsumerMain implements ApplicationRunner {
 			logger.error(e.getMessage());
 			return null;
 		}
-		final List<AuthRule> rules = new ArrayList<>();
+		List<AuthRule> rules = new ArrayList<>();
 
 		for (final JsonNode rule : newRulesJson) {
 			try {
@@ -120,7 +130,7 @@ public class ConsumerMain implements ApplicationRunner {
 				}
 				rules.add(newRule);
 			} catch (final Exception e) {
-				logger.error("Could not create authorization rule (invalid json format): " + e.getMessage());
+				logger.error("Could not create authorization rule (invalid json format): " + rule + ", reason: " + e.getMessage());
 			}
 		}
 		return rules;
@@ -128,24 +138,24 @@ public class ConsumerMain implements ApplicationRunner {
 
 	// -------------------------------------------------------------------------------------------------
 	private void updateAuthRules(final List<AuthRule> newRules) {
-		deleteRules(newRules);
-		addRules(newRules);
+		if (deleteRules(newRules)) {
+			try {
+				addRules(newRules);
+			} catch (Exception e) {
+				return;
+			}
+		}
 	}
 
 	// -------------------------------------------------------------------------------------------------
-	private void deleteRules(final List<AuthRule> rules) {
+	//returns true if the rules were successfully deleted, else returns false
+	private boolean deleteRules(final List<AuthRule> rules) {
 		List<Long> ruleIdsToDelete = new ArrayList<Long>();
 		try {
 			ruleIdsToDelete = getRuleIdsToDelete(getAuthorizationRules(), getSystemIdsToDelete(rules));
 		} catch (final Exception e) {
-			logger.error(e.getMessage());
-		}
-
-		Map<String, String> authorizationUri = null;
-		try {
-			authorizationUri = getAuthorizationUri();
-		} catch (final Exception e) {
-			logger.error(e.getMessage());
+			logger.error("Finding the authorization rules to delete was unsuccessfull. Reason: " + e.getMessage());
+			return false;
 		}
 
 		for (final Long id : ruleIdsToDelete) {
@@ -153,10 +163,11 @@ public class ConsumerMain implements ApplicationRunner {
 			final String response = arrowheadService.consumeServiceHTTP(String.class, HttpMethod.DELETE,
 					Utilities.createURI(authorizationUri.get(ConsumerConstants.SCHEME), authorizationUri.get(ConsumerConstants.HOST),
 							Integer.parseInt(authorizationUri.get(ConsumerConstants.PORT)), authorizationUri.get(ConsumerConstants.PATH)
-									+ ConsumerConstants.QUERY_AUTH_INTRA_CLOUD + "/" + Long.toString(id)),
+									+ ConsumerConstants.OP_AUTH_INTRA_CLOUD + "/" + Long.toString(id)),
 					null, null);
 			logger.debug("Http DELETE response: " + response);
 		}
+		return true;
 	}
 
 	// -------------------------------------------------------------------------------------------------
@@ -214,20 +225,26 @@ public class ConsumerMain implements ApplicationRunner {
 
 	// -------------------------------------------------------------------------------------------------
 	private void addSingleRule(final AuthorizationIntraCloudRequestDTO ruleToAdd) {
-		Map<String, String> authorizationUri = null;
-		try {
-			authorizationUri = getAuthorizationUri();
-		} catch (final Exception e) {
-			logger.error(e.getMessage());
-		}
 
 		logger.debug("Sending the POST request for the following authorization rule: " + ruleToAdd.toString());
-		final AuthorizationIntraCloudListResponseDTO response = arrowheadService.consumeServiceHTTP(
-				AuthorizationIntraCloudListResponseDTO.class, HttpMethod.POST,
-				Utilities.createURI(authorizationUri.get(ConsumerConstants.SCHEME), authorizationUri.get(ConsumerConstants.HOST),
-						Integer.parseInt(authorizationUri.get(ConsumerConstants.PORT)),
-						authorizationUri.get(ConsumerConstants.PATH) + ConsumerConstants.QUERY_AUTH_INTRA_CLOUD),
-				null, ruleToAdd);
+		AuthorizationIntraCloudListResponseDTO response = null;
+		try {
+			response = arrowheadService.consumeServiceHTTP(
+					AuthorizationIntraCloudListResponseDTO.class, HttpMethod.POST,
+					Utilities.createURI(authorizationUri.get(ConsumerConstants.SCHEME), authorizationUri.get(ConsumerConstants.HOST),
+							Integer.parseInt(authorizationUri.get(ConsumerConstants.PORT)),
+							authorizationUri.get(ConsumerConstants.PATH) + ConsumerConstants.OP_AUTH_INTRA_CLOUD),
+					null, ruleToAdd);
+		} catch (ArrowheadException ae) {
+			if (ae.getErrorCode() == HttpStatus.BAD_REQUEST.value()) {
+				logger.error("Error 400 occured while applying authorization rule: " + ruleToAdd.toString() + ", reason: " + ae.getMessage());
+				return;
+			}
+			if (ae.getErrorCode() == HttpStatus.INTERNAL_SERVER_ERROR.value() || ae.getErrorCode() == HttpStatus.UNAUTHORIZED.value()) {
+				logger.error("Error " + ae.getErrorCode() + " occured while applying authorization rule: " + ruleToAdd.toString() + ", reason: " + ae.getMessage());
+				throw ae;
+			}
+		}
 		if (response == null) {
 			logger.error("Could not apply the following authorization rule: " + ruleToAdd.toString());
 		} else {
@@ -284,7 +301,7 @@ public class ConsumerMain implements ApplicationRunner {
 					result.add(system.getId());
 				}
 			}
-			//case: sisteminfo is systemname
+			//case: systeminfo is systemname
 		} else {
 			for (final SystemResponseDTO system : systems) {
 				if (system.getSystemName().equals(systemInfoFormatted)) {
@@ -331,7 +348,9 @@ public class ConsumerMain implements ApplicationRunner {
 
 	// -------------------------------------------------------------------------------------------------
 	private List<Long> getRuleIdsToDelete(final List<AuthorizationIntraCloudResponseDTO> rules, final List<Long> systemIds) {
+
 		final List<Long> result = new ArrayList<>();
+
 		for (final AuthorizationIntraCloudResponseDTO rule : rules) {
 			for (final Long id : systemIds) {
 				if (rule.getConsumerSystem().getId() == id) {
@@ -382,24 +401,22 @@ public class ConsumerMain implements ApplicationRunner {
 	}
 
 	// -------------------------------------------------------------------------------------------------
-	private List<AuthorizationIntraCloudResponseDTO> getAuthorizationRules() {
-		Map<String, String> authorizationUri = null;
-		List<AuthorizationIntraCloudResponseDTO> rules = null;
-		try {
-			authorizationUri = getAuthorizationUri();
-		} catch (final Exception e) {
-			logger.error(e.getMessage());
-		}
+	private List<AuthorizationIntraCloudResponseDTO> getAuthorizationRules() throws Exception {
+
+		List<AuthorizationIntraCloudResponseDTO> rules = new ArrayList<>();
+
 		logger.debug("Get authorization rules request started...");
 		final AuthorizationIntraCloudListResponseDTO response = arrowheadService.consumeServiceHTTP(
 				AuthorizationIntraCloudListResponseDTO.class, HttpMethod.GET,
 				Utilities.createURI(authorizationUri.get(ConsumerConstants.SCHEME), authorizationUri.get(ConsumerConstants.HOST),
 						Integer.parseInt(authorizationUri.get(ConsumerConstants.PORT)),
-						authorizationUri.get(ConsumerConstants.PATH) + ConsumerConstants.QUERY_AUTH_INTRA_CLOUD),
-				null, null);
+						authorizationUri.get(ConsumerConstants.PATH) + ConsumerConstants.OP_AUTH_INTRA_CLOUD),
+				null,
+				null);
 
 		if (response == null) {
 			logger.error("Getting the authorization rules was unsuccessful!");
+			throw new Exception("Existing authorization rules cannot be fetched.");
 		} else if (response.getData().isEmpty()) {
 			logger.debug("No current authorization were found.");
 		} else {

@@ -68,19 +68,6 @@ public class AuthRule {
 	}
 
 	//-------------------------------------------------------------------------------------------------
-	public void printOut() {
-		System.out.println("consumer: " + consumer);
-		System.out.println("provider: " + provider);
-		System.out.println("service: " + service);
-		System.out.println("interfaces: ");
-		System.out.print("\t");
-		for (String i : interfaces) {
-			System.out.print(i + " ");
-		}
-		System.out.println();
-	}
-
-	//-------------------------------------------------------------------------------------------------
 	public String toString() {
 		return new String("consumer: " + consumer + ", provider: " + provider + ", service: " + service + ", interfaces: " + interfaces.toString());
 	}
