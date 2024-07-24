@@ -98,7 +98,7 @@ public class ConsumerMain implements ApplicationRunner {
 			services = getServices();
 			interfaces = getInterfaces();
 			authorizationUri = getAuthorizationUri();
-		} catch (Exception e) {
+		} catch (final Exception e) {
 			logger.error("Updating the authorization rules was unsuccessful, reason: " + e.getMessage());
 			return;
 		}
@@ -119,7 +119,7 @@ public class ConsumerMain implements ApplicationRunner {
 			logger.error(e.getMessage());
 			return null;
 		}
-		List<AuthRule> rules = new ArrayList<>();
+		final List<AuthRule> rules = new ArrayList<>();
 
 		for (final JsonNode rule : newRulesJson) {
 			try {
@@ -141,7 +141,7 @@ public class ConsumerMain implements ApplicationRunner {
 		if (deleteRules(newRules)) {
 			try {
 				addRules(newRules);
-			} catch (Exception e) {
+			} catch (final Exception e) {
 				return;
 			}
 		}
@@ -235,7 +235,7 @@ public class ConsumerMain implements ApplicationRunner {
 							Integer.parseInt(authorizationUri.get(ConsumerConstants.PORT)),
 							authorizationUri.get(ConsumerConstants.PATH) + ConsumerConstants.OP_AUTH_INTRA_CLOUD),
 					null, ruleToAdd);
-		} catch (ArrowheadException ae) {
+		} catch (final ArrowheadException ae) {
 			if (ae.getErrorCode() == HttpStatus.BAD_REQUEST.value()) {
 				logger.error("Error 400 occured while applying authorization rule: " + ruleToAdd.toString() + ", reason: " + ae.getMessage());
 				return;
