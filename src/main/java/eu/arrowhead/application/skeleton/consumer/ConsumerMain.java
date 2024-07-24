@@ -2,6 +2,7 @@ package eu.arrowhead.application.skeleton.consumer;
 
 import java.io.File;
 import java.io.IOException;
+import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -131,6 +132,7 @@ public class ConsumerMain implements ApplicationRunner {
 				rules.add(newRule);
 			} catch (final Exception e) {
 				logger.error("Could not create authorization rule (invalid json format): " + rule + ", reason: " + e.getMessage());
+				return null;
 			}
 		}
 		return rules;
