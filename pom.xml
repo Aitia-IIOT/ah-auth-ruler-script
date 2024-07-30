@@ -10,7 +10,7 @@
 	
 	<groupId>ai.aitia</groupId>	
 	<artifactId>ah-auth-ruler</artifactId>
-	<version>4.4.1.0</version>
+	<version>1.0.0</version>
 	<packaging>jar</packaging>
 	<name>Arrowhead Authorization Ruler</name>
 	<description>Updates authorization rules in an Arrowhead Local Cloud</description>
