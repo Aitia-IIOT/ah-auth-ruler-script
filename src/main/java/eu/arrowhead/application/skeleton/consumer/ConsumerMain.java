@@ -187,7 +187,7 @@ public class ConsumerMain implements ApplicationRunner {
 		final List<AuthorizationIntraCloudRequestDTO> dtoList = new ArrayList<>();
 
 		List<Long> consumerIdList; //multiple consumerid can match one auth rule's systeminfo
-		List<Long> prodiverIdList; //multiple providerid can match one auth rule's systeminfo
+		List<Long> providerIdList; //multiple providerid can match one auth rule's systeminfo
 
 		List<Long> serviceDefinitionId; //contains one element, but must be a list because of the DTO
 		List<Long> interfaceIds;
@@ -195,13 +195,13 @@ public class ConsumerMain implements ApplicationRunner {
 		for (int i = 0; i < rules.size(); i++) {
 
 			consumerIdList = new ArrayList<>();
-			prodiverIdList = new ArrayList<>();
+			providerIdList = new ArrayList<>();
 			serviceDefinitionId = new ArrayList<>(1);
 			interfaceIds = new ArrayList<>();
 
 			try {
 				consumerIdList = getSystemIdsByInfo(rules.get(i).getConsumer());
-				prodiverIdList = getSystemIdsByInfo(rules.get(i).getProvider());
+				providerIdList = getSystemIdsByInfo(rules.get(i).getProvider());
 
 				serviceDefinitionId.add(serviceDefinitionToId(rules.get(i).getService()));
 
@@ -211,7 +211,7 @@ public class ConsumerMain implements ApplicationRunner {
 				}
 
 				for (final Long consumerId : consumerIdList) {
-					for (final Long providerId : prodiverIdList) {
+					for (final Long providerId : providerIdList) {
 						dtoList.add(new AuthorizationIntraCloudRequestDTO(consumerId, Arrays.asList(providerId), serviceDefinitionId,
 								interfaceIds));
 					}
