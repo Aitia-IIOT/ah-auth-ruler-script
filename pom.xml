@@ -17,10 +17,10 @@
 	
 	<url>https://github.com/Aitia-IIOT/ah-auth-ruler-script</url>
 	<licenses>
-    	<license>
-	     	<name>Eclipse Public License - v 2.0</name>
-	     	<url>https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.txt</url>
-	   </license>
+		<license>
+      		<name>MIT License</name>
+      		<url>http://www.opensource.org/licenses/mit-license.php</url>
+   		</license>
   	</licenses>
 	
 	<dependencies>
@@ -28,7 +28,14 @@
 			<groupId>ai.aitia</groupId>
 			<artifactId>arrowhead-application-library-java-spring</artifactId>
 			<version>4.4.0.2</version>
-		</dependency>		
+		</dependency>
+		
+		<!-- https://mvnrepository.com/artifact/com.google.code.gson/gson -->
+		<dependency>
+    		<groupId>com.google.code.gson</groupId>
+    		<artifactId>gson</artifactId>
+		</dependency>
+	
 	</dependencies>
 	
 	<build>

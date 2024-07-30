@@ -10,5 +10,5 @@ import ai.aitia.arrowhead.application.library.config.DefaultSecurityConfig;
 @ConditionalOnWebApplication
 @EnableWebSecurity
 public class ConsumerSecurityConfig extends DefaultSecurityConfig {
-	
+
 }

@@ -13,11 +13,10 @@ import eu.arrowhead.common.security.AccessControlFilter;
 @ConditionalOnWebApplication
 @ConditionalOnProperty(name = CommonConstants.SERVER_SSL_ENABLED, matchIfMissing = true)
 public class ConsumerAccessControlFilter extends AccessControlFilter {
-	
+
 	@Override
-	protected void checkClientAuthorized(final String clientCN, final String method, final String requestTarget, final String requestJSON, final Map<String,String[]> queryParams) {
+	protected void checkClientAuthorized(final String clientCN, final String method, final String requestTarget, final String requestJSON, final Map<String, String[]> queryParams) {
 		super.checkClientAuthorized(clientCN, method, requestTarget, requestJSON, queryParams);
-		
-		//TODO: implement here your custom access filter if any further
+
 	}
 }
