@@ -156,7 +156,7 @@ public class ConsumerMain implements ApplicationRunner {
 		try {
 			ruleIdsToDelete = getRuleIdsToDelete(getAuthorizationRules(), getSystemIdsToDelete(rules));
 		} catch (final Exception e) {
-			logger.error("Finding the authorization rules to delete was unsuccessfull. Reason: " + e.getMessage());
+			logger.error("Finding the authorization rules to delete was unsuccessful. Reason: " + e.getMessage());
 			return false;
 		}
 
